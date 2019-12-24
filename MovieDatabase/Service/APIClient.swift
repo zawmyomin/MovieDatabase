@@ -16,12 +16,49 @@ class WSAPIClient {
     
 static let shared = WSAPIClient()
     
+    let baseUrl = "https://api.themoviedb.org/3/movie/popular?api_key=db85bc6bf1d96e2f47ac91af80e1d717&language=en-US&page="
+    
+    func getMovieWithPage(page: Int,completion: @escaping (JSON, Int) -> Void){
+        
+         let strUrl = "\(baseUrl)\(page)"
+        
+        Alamofire.request(strUrl, method: .get, parameters: nil, encoding: URLEncoding.default, headers: nil).responseData{ (response) in
+            let statusCode = response.response?.statusCode
+            if statusCode == 200 {
+                let json = JSON(response.result.value!)
+                completion(json, statusCode!)
+            }else{
+                completion(JSON.null, statusCode!)
+            }
+        }
+        
+    }
+    
+    let tvshowBaseurl = "https://api.themoviedb.org/3/tv/popular?api_key=db85bc6bf1d96e2f47ac91af80e1d717&language=en-US&page="
+    
+    func getTvShowWithPage(page: Int,completion: @escaping (JSON, Int) -> Void){
+        let tvShowurl = "\(tvshowBaseurl)\(page)"
+        
+        Alamofire.request(tvShowurl, method: .get, parameters: nil, encoding: URLEncoding.default, headers: nil).responseData { (response) in
+            let statusCode = response.response?.statusCode
+            if statusCode == 200 {
+                let json = JSON(response.result.value!)
+                completion(json, statusCode!)
+            }else {
+                completion(JSON.null, statusCode!)
+            }
+        }
+    }
+    
+    
+    
+    
+    
 
 func getSmartSearchData(keyword: String,completion: @escaping (JSON, Int) -> Void){
     
 //    let url = " http://api.themoviedb.org/3/search/person?api_key=db85bc6bf1d96e2f47ac91af80e1d717&query=\(keyword)"
-   // let url = " http:/f/api.themoviedb.org/3/search/person?api_key=db85bc6bf1d96e2f47ac91af80e1d717&query=morgan+freeman"
-    //let escapedURL = url.addingPercentEncoding(withAllowedCharacters:NSCharacterSet.urlQueryAllowed)
+  
     
     let url = "https://api.themoviedb.org/3/search/movie?api_key=db85bc6bf1d96e2f47ac91af80e1d717&language=en-US&query=\(keyword)&page=1&include_adult=false"
     let escapedURL = url.addingPercentEncoding(withAllowedCharacters:NSCharacterSet.urlQueryAllowed)

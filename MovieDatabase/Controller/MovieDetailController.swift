@@ -37,6 +37,19 @@ class MovieDetailController: UIViewController {
         return label
     }()
     
+     var deatilText: UITextView = {
+        let tView = UITextView()
+        tView.font = UIFont.systemFont(ofSize: 16,weight: .medium)
+        tView.textColor = .lightText
+        tView.backgroundColor = .clear
+        tView.textAlignment = .natural
+        
+        tView.isEditable = false
+        tView.isSelectable = false
+        return tView
+        
+    }()
+    
     lazy var  backButton: UIButton = {
         let button = UIButton(type: .system)
 //        button.setTitle("Back", for: .normal)
@@ -74,6 +87,7 @@ class MovieDetailController: UIViewController {
             
         }
         descLabel.text = obj?.overview
+        deatilText.text = obj?.overview
 //        let posterPath:String = obj!.poster_path!
         let backdrop_path:String = obj!.backdrop_path!
         let imageStr = "https://image.tmdb.org/t/p/original/\(backdrop_path)"
@@ -103,6 +117,7 @@ class MovieDetailController: UIViewController {
         
         view.addSubview(backButton)
         backButton.anchor(top: view.topAnchor, left: view.leftAnchor, bottom: nil, right: nil, paddingTop: 10, paddingLeft: 0, paddingBottom: 0, paddingRight: 0, width: 80, height: 80)
+        
         
     }
 }

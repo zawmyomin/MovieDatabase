@@ -9,6 +9,7 @@
 import UIKit
 
 private let reuseIdentifier = "MovieCell"
+private let loadingIdentifier = "LoadingCells"
 
 class MovieController: UICollectionViewController {
     
@@ -20,21 +21,69 @@ class MovieController: UICollectionViewController {
     var inSearchMode = false
     var filteredMovie = [Movie]()
     
-    let movieListUrl = "https://api.themoviedb.org/3/movie/popular?api_key=db85bc6bf1d96e2f47ac91af80e1d717&language=en-US&page=1"
+    var currentPage = 1
+    var numberOfPages = 0
+    var isLoading = false
+    private var shouldShowLoadingCell = false
+    
+    let movieListUrl = "https://api.themoviedb.org/3/movie/popular?api_key=db85bc6bf1d96e2f47ac91af80e1d717&language=en-US&page="
     
     override func viewDidLoad() {
         super.viewDidLoad()
         
         configureViewComponent()
-        prepareData()
+        //prepareData() //this func is close when is pagination func is work
+        
+        if Reachability.isConnectedToNetwork(){
+            loadMovie(currentPage)
+        }
         
     }
+    
     
     override func viewWillAppear(_ animated: Bool) {
         tabBarController?.tabBar.isHidden = false
         navigationController?.navigationBar.isHidden = false
     }
+
+    
+    func loadMovie(_ currentPage:Int){
         
+        WSAPIClient.shared.getMovieWithPage(page: currentPage) { (response, statuscode) in
+            if statuscode == 200 {
+                
+                let json = response["results"]
+                self.numberOfPages = response["total_pages"].intValue
+                self.movieList = Movie.createListOfMovie(json: json) as! [Movie]
+                 self.shouldShowLoadingCell = self.currentPage < self.numberOfPages
+                self.collectionView.reloadData()
+            }
+        }
+    }
+    
+            
+    
+    
+    private func isLoadingIndexPath(_ indexPath: IndexPath) -> Bool {
+        guard shouldShowLoadingCell else { return false }
+        return indexPath.row == self.movieList.count
+    }
+
+    func fetchNextPage(){
+        currentPage += 1
+        WSAPIClient.shared.getMovieWithPage(page: currentPage) { (response, statuscode) in
+            if statuscode == 200 {
+                var tempList:[Movie] = []
+                let json = response["results"]
+                tempList = Movie.createListOfMovie(json: json) as! [Movie]
+                self.movieList.append(contentsOf: tempList)
+                self.collectionView.reloadData()
+            }
+        }
+    }
+
+    
+    
     func getSearchData(searchKey: String){
            
         WSAPIClient.shared.getSmartSearchData(keyword: searchKey) { (response, status) in
@@ -109,13 +158,9 @@ class MovieController: UICollectionViewController {
         
         collectionView.register(MovieCell.self, forCellWithReuseIdentifier: reuseIdentifier)
         collectionView.keyboardDismissMode = .onDrag
+        collectionView.register(LoadingCells.self, forCellWithReuseIdentifier: loadingIdentifier)
         
-////        view.addSubview(lblNoData)
-//        lblNoData.isHidden = true
-//        lblNoData.translatesAutoresizingMaskIntoConstraints = false
-//        lblNoData.centerXAnchor.constraint(equalTo: self.view.centerXAnchor).isActive = true
-//        lblNoData.centerYAnchor.constraint(equalTo: self.view.centerYAnchor).isActive = true
-        
+
     }
     
      let lblNoData: UILabel = {
@@ -163,22 +208,38 @@ extension MovieController: UICollectionViewDelegateFlowLayout {
     }
     
     override func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        return inSearchMode ? filteredMovie.count : movieList.count  //self.movieList.count
-    
+        //return inSearchMode ? filteredMovie.count : movieList.count  //self.movieList.count
+        
+        if inSearchMode {
+            return filteredMovie.count
+        }else {
+             let count = movieList.count
+            return shouldShowLoadingCell ? count + 1 : count
+        }
+
     }
     
     override func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
-        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: reuseIdentifier, for: indexPath) as! MovieCell
-        if inSearchMode {
-            
-            cell.setData(obj: self.filteredMovie[indexPath.row])
-            
-        }else{
-            cell.setData(obj: self.movieList[indexPath.row])
-        }
         
-        cell.backgroundColor = .green
-        return cell
+                if isLoadingIndexPath(indexPath) {
+                    let cell =  collectionView.dequeueReusableCell(withReuseIdentifier: loadingIdentifier, for: indexPath) as! LoadingCells
+                    return cell
+                    
+                }else {
+                    let cell = collectionView.dequeueReusableCell(withReuseIdentifier: reuseIdentifier, for: indexPath) as! MovieCell
+                    if inSearchMode {
+                        
+                        cell.setData(obj: self.filteredMovie[indexPath.row])
+                        cell.backgroundColor = .green
+                              return cell
+                        
+                    }else{
+                        cell.setData(obj: self.movieList[indexPath.row])
+                        cell.backgroundColor = .green
+                              return cell
+                    }
+                }
+        
     }
     
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, insetForSectionAt section: Int) -> UIEdgeInsets {
@@ -188,6 +249,10 @@ extension MovieController: UICollectionViewDelegateFlowLayout {
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
         
         let width = (view.frame.width - 30) / 2
+        if isLoadingIndexPath(indexPath){
+            return CGSize(width: width, height: 80)
+        }
+            
         return CGSize(width: width, height: 280)
     }
     
@@ -205,12 +270,27 @@ extension MovieController: UICollectionViewDelegateFlowLayout {
         navigationController?.pushViewController(controller, animated: true)
     }
     
-   
-    
-
-    
-    
+       
 }
+
+extension MovieController{
+    
+    override func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        
+        let currentOffset = scrollView.contentOffset.y
+        let maximumOffset = scrollView.contentSize.height - scrollView.frame.size.height
+        
+        // Change 10.0 to adjust the distance from bottom
+        if maximumOffset - currentOffset <= 0.0 {
+           
+                if currentPage < numberOfPages{
+                    fetchNextPage()
+                }
+            
+        }
+    }
+}
+
 
 extension MovieController: UISearchBarDelegate {
     

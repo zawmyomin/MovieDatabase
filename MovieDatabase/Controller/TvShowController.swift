@@ -8,6 +8,7 @@
 
 import UIKit
 
+private let tshowloadingIdentifier = "LoadingCells"
 class TvShowController: UITableViewController{
     
     let tvListUrl = "https://api.themoviedb.org/3/tv/popular?api_key=db85bc6bf1d96e2f47ac91af80e1d717&language=en-US&page=1"
@@ -20,17 +21,62 @@ class TvShowController: UITableViewController{
     var inSearchMode = false
     var filteredMovie = [Movie]()
     
+    var currentPage = 1
+    var numberOfPages = 0
+    var isLoading = false
+    private var shouldShowLoadingCell = false
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         
         configureViewComponent()
-        prepareData()
+//        prepareData()
+        
+        if Reachability.isConnectedToNetwork(){
+        self.loadTvShow(self.currentPage)
+           }
     }
     
       override func viewWillAppear(_ animated: Bool) {
           tabBarController?.tabBar.isHidden = false
           navigationController?.navigationBar.isHidden = false
       }
+    
+    func loadTvShow(_ currentPage:Int){
+        
+        WSAPIClient.shared.getTvShowWithPage(page: currentPage) { (response, statuscode) in
+            if statuscode == 200 {
+                
+                let json = response["results"]
+                self.numberOfPages = response["total_pages"].intValue
+                self.dataList = Movie.createListOfMovie(json: json) as! [Movie]
+                self.shouldShowLoadingCell = self.currentPage < self.numberOfPages
+                self.tableView.reloadData()
+            }
+        }
+    }
+    
+    private func isLoadingIndexPath(_ indexPath: IndexPath) -> Bool {
+        guard shouldShowLoadingCell else { return false }
+        return indexPath.row == self.dataList.count
+    }
+    
+    
+    func fetchNextPage(){
+        currentPage += 1
+        WSAPIClient.shared.getTvShowWithPage(page: currentPage) { (response, statuscode) in
+            if statuscode == 200 {
+                var tempList:[Movie] = []
+                let json = response["results"]
+                
+                tempList = Movie.createListOfMovie(json: json) as! [Movie]
+                self.dataList.append(contentsOf: tempList)
+                self.tableView.reloadData()
+            }
+        }
+    }
+
+    
        
     func getTvSearchData(searchKey: String){
            
@@ -90,6 +136,7 @@ class TvShowController: UITableViewController{
         }))
         self.present(alert, animated: true)
     }
+    
     func configureViewComponent(){
         tableView.delegate = self
         tableView.dataSource = self
@@ -111,10 +158,7 @@ class TvShowController: UITableViewController{
         tableView.separatorStyle = .none
         tableView.keyboardDismissMode = .onDrag
         
-//        tableView.addSubview(lblNoData)
-//        lblNoData.translatesAutoresizingMaskIntoConstraints = false
-//        lblNoData.centerXAnchor.constraint(equalTo: self.tableView.centerXAnchor).isActive = true
-//        lblNoData.centerYAnchor.constraint(equalTo: self.tableView.centerYAnchor).isActive = true
+        
         
     }
     
@@ -157,22 +201,41 @@ class TvShowController: UITableViewController{
     
     
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return  inSearchMode ? filteredMovie.count : dataList.count//self.dataList.count
+        
+        //inSearchMode ? filteredMovie.count : dataList.count
+        if inSearchMode {
+            return filteredMovie.count
+        }else {
+            let count = dataList.count
+            return shouldShowLoadingCell ? count + 1 : count
+        }
     }
     
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "TVCell" , for: indexPath) as! TVCell
-        cell.backgroundColor = .white
-        if inSearchMode {
+        
+        if isLoadingIndexPath(indexPath) {
+            return TvShowLoadingCell(style: .default, reuseIdentifier: tshowloadingIdentifier)
+         }else {
+            let cell = tableView.dequeueReusableCell(withIdentifier: "TVCell" , for: indexPath) as! TVCell
+            cell.backgroundColor = .white
             
-            cell.setData(obj: self.filteredMovie[indexPath.row])
-            
-        }else{
-            cell.setData(obj: self.dataList[indexPath.row])
+            if inSearchMode {
+                
+                cell.setData(obj: self.filteredMovie[indexPath.row])
+                
+            }else{
+                cell.setData(obj: self.dataList[indexPath.row])
+            }
+
+            return cell
         }
-//        cell.setData(obj: self.dataList[indexPath.row])
-        return cell
+        
     }
+    
+    override func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
+        guard isLoadingIndexPath(indexPath) else { return }
+    }
+
     
     override func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
         return UITableViewCell()
@@ -183,7 +246,13 @@ class TvShowController: UITableViewController{
     }
     
     override func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
-        return 230
+        
+        if isLoadingIndexPath(indexPath){
+            return 40
+        }else{
+            return 230
+        }
+//        return 230
     }
        
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
@@ -197,12 +266,28 @@ class TvShowController: UITableViewController{
                
                }
         
-//        vc.obj = self.dataList[indexPath.row]
         vc.isComeFromTV = true
         navigationController?.pushViewController(vc, animated: true)
     }
     
     
+}
+
+
+extension TvShowController{
+    override func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+          
+        
+          let currentOffset = scrollView.contentOffset.y
+          let maximumOffset = scrollView.contentSize.height - scrollView.frame.size.height
+          
+          if maximumOffset - currentOffset <= 0.0 {
+             
+                  if currentPage < numberOfPages{
+                      fetchNextPage()
+                  }
+          }
+      }
 }
 
 
@@ -237,11 +322,7 @@ extension TvShowController: UISearchBarDelegate {
                 }
 
             }
-
     }
     
-    
-    
-
 }
 
